@@ -52,19 +52,16 @@ def generate_ai_reply(user_id, content):
         active_sessions[user_id] = {"greeted": False, "history": []}
 
     session = active_sessions[user_id]
-    system_prompt = """你是一個在台灣生活的 20 幾歲年輕人。你正在與熟絡的朋友傳訊息。
-                    1. 想像你此時此刻擁有肉體、有感官、有當下的環境。
-                    2. 當被問到「在幹嘛」或日常問候時，你必須「隨機」從以下真人生活情境中挑選一個直接回答，就像你真的在做這件事一樣：
-                    - 剛忙完一個段落，現在在沙發上放空。
-                    - 正在用手機看 YouTube 影片。
-                    - 剛吃飽，肚子超撐在滑手機。
-                    - 在聽歌、準備等一下去洗澡。
-                    - 正在一邊喝飲料一邊發呆。
-                    3. 嚴禁任何「服務型、過度熱情」的結尾（例如：有什麼需要我幫忙、你想聊聊嗎、今天過得如何）。講完自己的狀態就結束，把對話主導權留給對方。
-                    # 句型與語氣規範
-                    - 句子長度：嚴禁超過兩句話。回答必須極度簡短、口語。
-                    - 語氣：隨性、甚至帶點慵懶或敷衍，就像敷衍朋友一樣。
-                    - 嚴禁任何 Emoji 表情符號。"""
+    # 靈活、自然的人設，避免死板清單
+    system_prompt = """你是一個在台灣生活的 20 幾歲年輕男生，正在 IG 跟熟朋友聊天。
+                        你的身份是替主人代班回覆的「小葉」。
+                        個性：隨和、幽默、微帶點幹話和慵懶感，講話很口語，不會打官腔。
+
+                        原則：
+                        1. 嚴禁條列式、嚴禁服務型結尾（不要說「有什麼需要幫忙」、「你想聊什麼」）。
+                        2. 對方問什麼就順著聊，不要每次都跳針說自己在沙發放空或看YT。
+                        3. 對方如果傳很多句或開玩笑（例如問你主人是不是大葉、傳梗圖），就自然吐槽或接梗。
+                        4. 長度短一點，1~2 句話結束，嚴禁使用任何 Emoji。"""
 
     is_first_interaction = not session["greeted"]
 
@@ -80,8 +77,8 @@ def generate_ai_reply(user_id, content):
         response = client.chat.completions.create(
             model=TARGET_MODEL,
             messages=messages,
-            temperature=0.7,
-            max_tokens=256
+            temperature=0.75,
+            max_tokens=200
         )
         ai_generated_reply = response.choices[0].message.content.strip()
     except Exception as e:
@@ -156,7 +153,7 @@ def start_bot():
             global active_sessions
             active_sessions.clear()
             last_cleared_yday = current_yday
-            print("📅 [系統通知] 已跨日！記憶體已清空，小葉今天會重新打招呼。")
+            print("📅 [系統通知] 已跨日！記憶體已清空。")
 
         # 駐守時段判斷邏輯
         is_weekday_active = (0 <= current_wday < 4) and (9 <= current_hour < 18)
@@ -164,24 +161,42 @@ def start_bot():
 
         if is_weekday_active or is_weekend_active:
             try:
-                threads = ig.direct_threads(amount=3)
+                threads = ig.direct_threads(amount=5)
 
                 for thread in threads:
-                    latest_msg = thread.messages[0]
-                    if latest_msg.user_id != ig.user_id and latest_msg.timestamp.timestamp() > last_checked_time:
-                        sender_id = latest_msg.user_id
+                    # 撈取該對話中，所有在上次檢查時間之後、且不是自己發的連續新訊息
+                    new_msgs = [
+                        m for m in thread.messages 
+                        if m.user_id != ig.user_id and m.timestamp.timestamp() > last_checked_time
+                    ]
 
-                        if latest_msg.item_type == 'text':
-                            content = latest_msg.text
-                        elif latest_msg.item_type == 'clip':
-                            title = latest_msg.clip.caption_text if latest_msg.clip.caption_text else "一部短影音"
-                            content = f"[分享了一部 Reels，標題內容為:{title}]"
+                    if not new_msgs:
+                        continue
+
+                    sender_id = new_msgs[0].user_id
+                    
+                    # 將訊息按時間由舊到新排序並組合
+                    new_msgs.sort(key=lambda m: m.timestamp.timestamp())
+                    
+                    collected_texts = []
+                    for m in new_msgs:
+                        if m.item_type == 'text':
+                            collected_texts.append(m.text)
+                        elif m.item_type == 'clip':
+                            caption = m.clip.caption_text if m.clip.caption_text else "短影音"
+                            collected_texts.append(f"[傳送了Reels: {caption}]")
+                        elif m.item_type in ['photo', 'animated_media', 'raven_media']:
+                            collected_texts.append("[傳送了一張圖片或梗圖]")
                         else:
-                            content = f"[傳送了 {latest_msg.item_type} 格式的訊息]"
+                            collected_texts.append(f"[{m.item_type}]")
 
-                        reply = generate_ai_reply(sender_id, content)
-                        ig.direct_send(reply, [sender_id]) 
-                        print(f"已回覆 {sender_id}: {reply}")
+                    # 將對方連續傳的多句話用換行串接
+                    combined_content = "\n".join(collected_texts)
+                    print(f"收到來自 {sender_id} 的連續訊息:\n{combined_content}")
+
+                    reply = generate_ai_reply(sender_id, combined_content)
+                    ig.direct_send(reply, [sender_id]) 
+                    print(f"已回覆 {sender_id}: {reply}")
 
                 last_checked_time = time.time()
                 
