@@ -156,15 +156,13 @@ def start_bot():
             print("📅 [系統通知] 已跨日！記憶體已清空。")
 
         # 駐守時段判斷邏輯
-        is_weekday_active = (0 <= current_wday < 4) and (9 <= current_hour < 18)
-        is_weekend_active = (current_wday >= 5)
+        is_mon_to_thu_work_hours = (0 <= current_wday <= 3) and (9 <= current_hour < 18)
 
-        if is_weekday_active or is_weekend_active:
+        if is_mon_to_thu_work_hours:
             try:
                 threads = ig.direct_threads(amount=5)
 
                 for thread in threads:
-                    # 撈取該對話中，所有在上次檢查時間之後、且不是自己發的連續新訊息
                     new_msgs = [
                         m for m in thread.messages 
                         if m.user_id != ig.user_id and m.timestamp.timestamp() > last_checked_time
@@ -174,8 +172,6 @@ def start_bot():
                         continue
 
                     sender_id = new_msgs[0].user_id
-                    
-                    # 將訊息按時間由舊到新排序並組合
                     new_msgs.sort(key=lambda m: m.timestamp.timestamp())
                     
                     collected_texts = []
@@ -190,7 +186,6 @@ def start_bot():
                         else:
                             collected_texts.append(f"[{m.item_type}]")
 
-                    # 將對方連續傳的多句話用換行串接
                     combined_content = "\n".join(collected_texts)
                     print(f"收到來自 {sender_id} 的連續訊息:\n{combined_content}")
 
@@ -203,8 +198,9 @@ def start_bot():
             except Exception as e:
                 print(f"執行發生錯誤: {e}")
         else:
-            print(f"目前時間 {current_hour}:00 (平日)，非駐守時段，無動作。")
+            print(f"目前時間 {current_hour}:00 (星期 {current_wday+1})，非駐守時段，放假中。")
 
+        # 暫停 90 秒
         time.sleep(90)
 
 if __name__ == "__main__":
