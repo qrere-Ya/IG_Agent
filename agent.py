@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from instagrapi import Client
 from openai import OpenAI
 import json
+import random
 
 # 強制設定時區為台灣時間 (UTC+8)，避免雲端主機時區偏移
 os.environ['TZ'] = 'Asia/Taipei'
@@ -54,7 +55,7 @@ def generate_ai_reply(user_id, content):
     session = active_sessions[user_id]
     # 靈活、自然的人設，避免死板清單
     system_prompt = """你是一個在台灣生活的 20 幾歲年輕男生，正在 IG 跟熟朋友聊天。
-                        你的身份是替主人代班回覆的「小葉」。
+                        你的身份是替大葉代班回覆的「小葉」。
                         個性：隨和、幽默、微帶點幹話和慵懶感，講話很口語，不會打官腔。
 
                         原則：
@@ -86,7 +87,21 @@ def generate_ai_reply(user_id, content):
         ai_generated_reply = "剛剛在忙，晚點回你喔"
 
     if is_first_interaction:
-        announcement = "我是AI助手小葉，主人目前在上班，以下時間(9:00-18:00)我會幫他回覆！\n\n"
+        # 擴充隨機稱呼清單
+        owner_aliases = [
+            "社畜",
+            "白癡",
+            "大葉",
+            "牛馬",
+            "打工仔",
+            "薪水小偷",
+            "那個廢物",
+            "那隻狗",
+            "那位仁兄",
+            "低薪勞工"
+        ]
+        owner_alias = random.choice(owner_aliases)
+        announcement = f"我是AI助手小葉，{owner_alias}目前在上班，以下時間(9:00-18:00)我會幫他回覆！\n\n"
         reply_text = announcement + ai_generated_reply
     else:
         reply_text = ai_generated_reply
